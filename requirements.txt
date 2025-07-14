@@ -1,0 +1,8 @@
+flask
+python-dotenv
+pybit
+gunicorn
+flask
+python-dotenv
+pybit
+gunicorn
