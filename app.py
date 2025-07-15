@@ -8,7 +8,6 @@ load_dotenv()
 
 BYBIT_API_KEY = os.getenv("BYBIT_API_KEY")
 BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
-QTY = 0.01  # שנה לפי גודל העסקה שאתה רוצה
 
 client = HTTP(
     testnet=False,
@@ -34,27 +33,42 @@ def webhook():
 
     action = data['action']
     symbol = data['symbol']
+    side = "Buy" if action == "buy" else "Sell"
 
     try:
-        side = "Buy" if action == "buy" else "Sell"
-        print(f"\n🚀 Placing order: {side} {symbol}...")
+        # שלב 1: לבדוק יתרת USDT
+        balance_data = client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
+        usdt_balance = float(balance_data['result']['list'][0]['coin'][0]['availableToTrade'])
 
+        print(f"💰 USDT Available: {usdt_balance}")
+
+        # שלב 2: לבדוק את מחיר השוק של הסימבול
+        price_data = client.get_ticker(category="linear", symbol=symbol)
+        mark_price = float(price_data['result']['lastPrice'])
+
+        print(f"📈 Market price of {symbol}: {mark_price}")
+
+        # שלב 3: לחשב כמות נכס לפי USDT
+        qty = round(usdt_balance / mark_price, 4)
+
+        print(f"📦 Order Qty: {qty}")
+
+        # שלב 4: שליחת פקודה
         result = client.place_order(
             category="linear",
             symbol=symbol,
             side=side,
             order_type="Market",
-            qty=QTY,
+            qty=qty,
             time_in_force="GoodTillCancel"
         )
 
-        print("\n✅ Order result:", result)
+        print("\n✅ Order executed:", result)
         return jsonify(result)
 
     except Exception as e:
         print("\n❌ Order failed:", traceback.format_exc())
         return jsonify({'error': str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
