@@ -12,8 +12,7 @@ BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
 client = HTTP(
     testnet=False,
     api_key=BYBIT_API_KEY,
-    api_secret=BYBIT_API_SECRET,
-    recv_window=5000
+    api_secret=BYBIT_API_SECRET
 )
 
 app = Flask(__name__)
@@ -22,60 +21,40 @@ app = Flask(__name__)
 def webhook():
     try:
         data = request.get_json(force=True)
-        print("\n✅ Payload received:", data)
+        print("📩 Payload received:", data)
     except Exception as e:
-        print("\n❌ Failed to parse JSON:", e)
+        print("❌ Failed to parse JSON:", e)
         return jsonify({'error': 'Invalid or missing JSON'}), 400
 
-    if not data or 'action' not in data or 'symbol' not in data:
-        return jsonify({'error': 'Missing required fields'}), 400
-
-    action = data['action']
-    symbol = data['symbol']
-    usdt_amount = float(data.get('usdt_amount', 10))  # ברירת מחדל 10 אם לא נשלח
-
     try:
-        # שליפת מחיר עדכני
+        action = data.get("action")
+        symbol = data.get("symbol")
+        usdt_amount = float(data.get("usdt_amount", 0))
+
+        if not action or not symbol or usdt_amount <= 0:
+            return jsonify({'error': 'Missing or invalid parameters'}), 400
+
+        # Get price using get_tickers (returns a list)
         tickers = client.get_tickers(category="linear", symbol=symbol)
-        mark_price = float(tickers['list'][0]['lastPrice'])
-        print(f"📈 Current price of {symbol}: {mark_price}")
+        price = float(tickers['list'][0]['lastPrice'])
 
-        # חישוב כמות לפי המחיר
-        quantity = round(usdt_amount / mark_price, 5)  # עיגול ל־5 ספרות
-        print(f"📦 Order quantity for ${usdt_amount}: {quantity}")
+        qty = round(usdt_amount / price, 4)
 
-        if action == "buy":
-            order = client.place_order(
-                category="linear",
-                symbol=symbol,
-                side="Buy",
-                order_type="Market",
-                qty=quantity,
-                time_in_force="GoodTillCancel"
-            )
-            print("✅ Buy order placed:", order)
-            return jsonify({'status': 'Buy order sent', 'details': order})
-
-        elif action == "sell":
-            order = client.place_order(
-                category="linear",
-                symbol=symbol,
-                side="Sell",
-                order_type="Market",
-                qty=quantity,
-                time_in_force="GoodTillCancel"
-            )
-            print("✅ Sell order placed:", order)
-            return jsonify({'status': 'Sell order sent', 'details': order})
-
-        else:
-            return jsonify({'error': 'Invalid action'}), 400
+        side = "Buy" if action.lower() == "buy" else "Sell"
+        resp = client.place_order(
+            category="linear",
+            symbol=symbol,
+            side=side,
+            order_type="Market",
+            qty=qty,
+            time_in_force="GoodTillCancel"
+        )
+        print("✅ Order Response:", resp)
+        return jsonify({'status': 'order placed', 'details': resp})
 
     except Exception as e:
-        print("\n❌ Error placing order:", traceback.format_exc())
+        print("❌ ERROR:", traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
-# 🟢 התחלת השרת עם PORT מ־Render
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5100))
-    app.run(host='0.0.0.0', port=port)
+    app.run(debug=False, host="0.0.0.0", port=10000)
