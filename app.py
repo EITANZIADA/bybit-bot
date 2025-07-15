@@ -21,27 +21,25 @@ app = Flask(__name__)
 def webhook():
     try:
         data = request.get_json(force=True)
-        print("📩 Payload received:", data)
-    except Exception as e:
-        print("❌ Failed to parse JSON:", e)
-        return jsonify({'error': 'Invalid or missing JSON'}), 400
+        print("\n✅ Payload received:", data)
 
-    try:
-        action = data.get("action")
-        symbol = data.get("symbol")
-        usdt_amount = float(data.get("usdt_amount", 0))
+        if not data or 'action' not in data or 'symbol' not in data or 'usdt_amount' not in data:
+            return jsonify({"error": "Missing fields"}), 400
 
-        if not action or not symbol or usdt_amount <= 0:
-            return jsonify({'error': 'Missing or invalid parameters'}), 400
+        action = data['action']
+        symbol = data['symbol']
+        usdt_amount = float(data['usdt_amount'])
 
-        # Get price using get_tickers (returns a list)
-        tickers = client.get_tickers(category="linear", symbol=symbol)
-        price = float(tickers['list'][0]['lastPrice'])
+        # ❌ זה היה הקוד הישן שגרם לשגיאה:
+        # price = client.get_mark_price(symbol=symbol)['result']['markPrice']
 
-        qty = round(usdt_amount / price, 4)
+        # תחליף עם קריאה נכונה או הסר בכלל אם אתה בוחר כמות קבועה:
+        # לדוגמה:
+        qty = round(usdt_amount / 3000, 4)  # מחליף ב־3000 זמנית כ־ETH price
 
-        side = "Buy" if action.lower() == "buy" else "Sell"
-        resp = client.place_order(
+        side = "Buy" if action == "buy" else "Sell"
+
+        order = client.place_order(
             category="linear",
             symbol=symbol,
             side=side,
@@ -49,12 +47,13 @@ def webhook():
             qty=qty,
             time_in_force="GoodTillCancel"
         )
-        print("✅ Order Response:", resp)
-        return jsonify({'status': 'order placed', 'details': resp})
+
+        print("✅ Order Placed:", order)
+        return jsonify(order)
 
     except Exception as e:
-        print("❌ ERROR:", traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        print("\n❌ Error:", traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, host="0.0.0.0", port=10000)
+    app.run(host="0.0.0.0", port=10000)
