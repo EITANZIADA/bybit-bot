@@ -28,7 +28,6 @@ def webhook():
         return jsonify({'error': 'Invalid or missing JSON'}), 400
 
     if not data or 'action' not in data or 'symbol' not in data:
-        print("\n⚠️ Missing required fields.")
         return jsonify({'error': 'Missing required fields'}), 400
 
     action = data['action']
@@ -36,31 +35,36 @@ def webhook():
     side = "Buy" if action == "buy" else "Sell"
 
     try:
-        # שלב 1: בדיקת יתרת USDT
+        # שלב 1: בדיקת יתרה
         balance_data = client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
-        coin_info = balance_data['result']['list'][0]['coin'][0]
-        print("🔍 coin_info:", coin_info)
+        print("📦 Raw balance data:", balance_data)
 
-        # בדיקה האם יש availableToTrade או availableBalance
-        if coin_info.get("availableToTrade") is not None:
-            usdt_balance = float(coin_info["availableToTrade"])
-        elif coin_info.get("availableBalance") is not None:
-            usdt_balance = float(coin_info["availableBalance"])
-        else:
-            return jsonify({"error": "No usable USDT balance found in account"}), 400
+        coin_list = balance_data.get('result', {}).get('list', [])
+        usdt_balance = None
+
+        for account in coin_list:
+            coins = account.get('coin', [])
+            for coin in coins:
+                if coin['coin'] == 'USDT':
+                    usdt_balance = float(coin.get('availableToTrade', 0))
+
+        if usdt_balance is None:
+            return jsonify({'error': 'USDT balance not found'}), 500
+        if usdt_balance <= 0:
+            return jsonify({'error': 'No usable USDT balance in account'}), 500
 
         print(f"💰 USDT Available: {usdt_balance}")
 
-        # שלב 2: קבלת מחיר שוק
+        # שלב 2: מחיר שוק
         price_data = client.get_ticker(category="linear", symbol=symbol)
         mark_price = float(price_data['result']['lastPrice'])
-        print(f"📈 Market price of {symbol}: {mark_price}")
+        print(f"📈 Market price: {mark_price}")
 
-        # שלב 3: חישוב כמות רכישה
+        # שלב 3: חישוב כמות לקנייה
         qty = round(usdt_balance / mark_price, 4)
-        print(f"📦 Order Qty: {qty}")
+        print(f"🔢 Qty to trade: {qty}")
 
-        # שלב 4: ביצוע ההזמנה
+        # שלב 4: שליחת פקודה
         result = client.place_order(
             category="linear",
             symbol=symbol,
@@ -69,12 +73,11 @@ def webhook():
             qty=qty,
             time_in_force="GoodTillCancel"
         )
-
-        print("\n✅ Order executed:", result)
+        print("✅ Order placed:", result)
         return jsonify(result)
 
     except Exception as e:
-        print("\n❌ Order failed:", traceback.format_exc())
+        print("❌ Exception:", traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
