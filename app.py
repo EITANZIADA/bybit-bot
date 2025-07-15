@@ -21,48 +21,53 @@ app = Flask(__name__)
 def webhook():
     try:
         data = request.get_json(force=True)
-        print("\n✅ Payload received:", data)
-    except Exception:
-        print("\n❌ Failed to parse JSON. Raw body:", request.data)
+        print("✅ Payload received:", data)
+    except Exception as e:
+        print("❌ Failed to parse JSON:", e)
         return jsonify({'error': 'Invalid or missing JSON'}), 400
 
     if not data or 'action' not in data or 'symbol' not in data:
         return jsonify({'error': 'Missing required parameters'}), 400
 
-    action = data['action'].lower()
-    symbol = data['symbol'].upper()
-    qty = data.get("qty", None)
-    usdt_amount = data.get("usdt_amount", None)
+    action = data['action']
+    symbol = data['symbol']
+    usdt_amount = float(data.get('usdt_amount', 10))  # ברירת מחדל: 10 דולר
 
     try:
-        # חישוב כמות לפי USDT אם לא נשלח qty
-        if qty is None and usdt_amount is not None:
-            price_data = client.get_ticker(symbol=symbol)
-            mark_price = float(price_data['result']['list'][0]['lastPrice'])
-            qty = round(usdt_amount / mark_price, 3)  # עיגול לשלוש ספרות אחרי הנקודה
+        # שליפת מחיר עדכני
+        price_data = client.get_mark_price(category="linear", symbol=symbol)
+        mark_price = float(price_data["result"]["markPrice"])
+        qty = round(usdt_amount / mark_price, 4)  # כמות מטבעות
 
-        if qty is None:
-            return jsonify({'error': 'Missing qty or usdt_amount'}), 400
+        print(f"🔢 Price: {mark_price}, Qty: {qty}, Action: {action}")
 
-        side = "Buy" if action == "buy" else "Sell"
+        if action == 'buy':
+            response = client.place_order(
+                category="linear",
+                symbol=symbol,
+                side="Buy",
+                order_type="Market",
+                qty=qty,
+                time_in_force="GoodTillCancel"
+            )
+        elif action == 'sell':
+            response = client.place_order(
+                category="linear",
+                symbol=symbol,
+                side="Sell",
+                order_type="Market",
+                qty=qty,
+                time_in_force="GoodTillCancel"
+            )
+        else:
+            return jsonify({'error': 'Invalid action'}), 400
 
-        print(f"📦 Sending order: {side} {qty} {symbol}")
-
-        order = client.place_order(
-            category="linear",
-            symbol=symbol,
-            side=side,
-            order_type="Market",
-            qty=qty,
-            time_in_force="GoodTillCancel"
-        )
-        return jsonify(order)
+        print("📤 Order response:", response)
+        return jsonify({'status': 'order sent', 'response': response})
 
     except Exception as e:
-        print("\n❌ Error placing order:")
-        traceback.print_exc()
+        print("❌ Error placing order:", traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5100)
+    app.run(debug=False, host='0.0.0.0', port=5100)
