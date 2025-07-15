@@ -8,7 +8,7 @@ load_dotenv()
 
 BYBIT_API_KEY = os.getenv("BYBIT_API_KEY")
 BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
-QTY =0.01
+QTY =100
 
 client = HTTP(
     testnet=False,
