@@ -33,7 +33,7 @@ def get_max_position_size(symbol):
         print("💵 Last price:", last_price)
 
         qty = available_usdt / last_price
-        return round(qty, 3)
+        return round(qty, 0.01)
     except Exception as e:
         print("❌ Error calculating max position size:", e)
         return 0
