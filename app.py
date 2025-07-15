@@ -12,7 +12,8 @@ BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
 client = HTTP(
     testnet=False,
     api_key=BYBIT_API_KEY,
-    api_secret=BYBIT_API_SECRET
+    api_secret=BYBIT_API_SECRET,
+    recv_window=5100
 )
 
 app = Flask(__name__)
@@ -21,28 +22,31 @@ app = Flask(__name__)
 def webhook():
     try:
         data = request.get_json(force=True)
-        print("✅ Payload received:", data)
-    except Exception as e:
-        print("❌ Failed to parse JSON:", e)
+        print("\n✅ Payload received:", data)
+    except Exception:
+        print("\n❌ Failed to parse JSON. Raw body:", request.data)
         return jsonify({'error': 'Invalid or missing JSON'}), 400
 
     if not data or 'action' not in data or 'symbol' not in data:
-        return jsonify({'error': 'Missing required parameters'}), 400
+        return jsonify({'error': 'Missing required fields'}), 400
 
     action = data['action']
     symbol = data['symbol']
-    usdt_amount = float(data.get('usdt_amount', 10))  # ברירת מחדל: 10 דולר
+    usdt_amount = data.get('usdt_amount')
 
     try:
-        # שליפת מחיר עדכני
-        price_data = client.get_mark_price(category="linear", symbol=symbol)
-        mark_price = float(price_data["result"]["markPrice"])
-        qty = round(usdt_amount / mark_price, 4)  # כמות מטבעות
+        # Get latest price for the symbol
+        ticker = client.get_tickers(category='linear', symbol=symbol)
+        price = float(ticker['result']['list'][0]['lastPrice'])
 
-        print(f"🔢 Price: {mark_price}, Qty: {qty}, Action: {action}")
+        print(f"📈 Current price for {symbol}: {price}")
 
-        if action == 'buy':
-            response = client.place_order(
+        qty = round(usdt_amount / price, 3) if usdt_amount else 0.01
+
+        print(f"💰 Calculated quantity: {qty}")
+
+        if action == "buy":
+            order = client.place_order(
                 category="linear",
                 symbol=symbol,
                 side="Buy",
@@ -50,8 +54,8 @@ def webhook():
                 qty=qty,
                 time_in_force="GoodTillCancel"
             )
-        elif action == 'sell':
-            response = client.place_order(
+        elif action == "sell":
+            order = client.place_order(
                 category="linear",
                 symbol=symbol,
                 side="Sell",
@@ -62,12 +66,11 @@ def webhook():
         else:
             return jsonify({'error': 'Invalid action'}), 400
 
-        print("📤 Order response:", response)
-        return jsonify({'status': 'order sent', 'response': response})
+        return jsonify(order)
 
     except Exception as e:
-        print("❌ Error placing order:", traceback.format_exc())
+        print("\n❌ Exception occurred:", traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=5100)
+    app.run()
