@@ -8,69 +8,67 @@ load_dotenv()
 
 BYBIT_API_KEY = os.getenv("BYBIT_API_KEY")
 BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
-QTY =100
 
 client = HTTP(
     testnet=False,
     api_key=BYBIT_API_KEY,
-    api_secret=BYBIT_API_SECRET,
-    recv_window=5000
+    api_secret=BYBIT_API_SECRET
 )
 
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    return "✅ השרת פועל אתה מקצוען!"
+# פונקציה שמביאה את כל היתרה שלך ומחשבת את הכמות לפי מחיר נוכחי
+def get_max_position_size(symbol):
+    try:
+        balance_data = client.get_wallet_balance(accountType="UNIFIED")
+        available_usdt = float(balance_data["result"]["list"][0]["totalEquity"])  # אפשר גם "availableBalance"
+
+        price_data = client.get_ticker(category="linear", symbol=symbol)
+        last_price = float(price_data["result"]["lastPrice"])
+
+        qty = available_usdt / last_price
+        return round(qty, 3)
+    except Exception as e:
+        print("❌ Error calculating max position size:", e)
+        return 0
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.get_json(force=True)
-        print("\n✅ Payload received:", data)
-    except Exception:
-        print("\n❌ Failed to parse JSON. Raw body:", request.data)
-        return jsonify({'error': 'Invalid or missing JSON'}), 400
+        print("✅ Webhook received:", data)
 
-    if not data or 'action' not in data or 'symbol' not in data:
-        print("\n⚠️ Invalid payload structure:", data)
-        return jsonify({'error': 'Invalid payload'}), 400
+        action = data.get("action")
+        symbol = data.get("symbol")
 
-    action = data['action']
-    symbol = data['symbol']
+        qty = get_max_position_size(symbol)
+        print(f"🔢 Calculated qty: {qty}")
 
-    try:
+        if qty < 0.01:
+            return jsonify({"error": "Not enough balance to place order"}), 400
+
         if action == "buy":
-            order = client.place_order(category="linear", symbol=symbol, side="Buy", order_type="Market", qty=QTY)
+            side = "Buy"
         elif action == "sell":
-            order = client.place_order(category="linear", symbol=symbol, side="Sell", order_type="Market", qty=QTY)
-        elif action in ["close_long", "close_short"]:
-            side = "Sell" if action == "close_long" else "Buy"
-            order = client.place_order(category="linear", symbol=symbol, side=side, order_type="Market", qty=QTY)
-        elif action == "close":
-            positions = client.get_positions(category="linear", symbol=symbol)["result"]["list"]
-            position = positions[0] if positions else None
-            if position and float(position["size"]) > 0:
-                current_side = position["side"]
-                opposite_side = "Sell" if current_side == "Buy" else "Buy"
-                order = client.place_order(category="linear", symbol=symbol, side=opposite_side, order_type="Market", qty=float(position["size"]))
-            else:
-                return jsonify({'status': 'no open position to close'}), 200
-        elif action == "update_stop":
-            if "new_stop" not in data or "side" not in data:
-                return jsonify({'error': 'Missing new_stop or side in payload'}), 400
-            new_stop = float(data["new_stop"])
-            side = data["side"].lower()
-            order = client.set_trading_stop(category="linear", symbol=symbol, stop_loss=new_stop)
-            return jsonify({'status': 'stop updated', 'response': order})
+            side = "Sell"
         else:
-            return jsonify({'error': 'Unknown action'}), 400
+            return jsonify({"error": "Invalid action"}), 400
 
-        return jsonify({'status': f'{action} executed', 'order': order})
+        order = client.place_order(
+            category="linear",
+            symbol=symbol,
+            side=side,
+            order_type="Market",
+            qty=qty
+        )
+
+        print("✅ Order placed:", order)
+        return jsonify(order)
 
     except Exception as e:
+        print("❌ Error in /webhook:", e)
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5100, debug=True)
+    app.run(host='0.0.0.0', port=5100)
