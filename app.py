@@ -21,16 +21,22 @@ app = Flask(__name__)
 def get_max_position_size(symbol):
     try:
         balance_data = client.get_wallet_balance(accountType="UNIFIED")
-        available_usdt = float(balance_data["result"]["list"][0]["totalEquity"])  # אפשר גם "availableBalance"
+        print("📦 Raw balance data:", balance_data)
+
+        available_usdt = float(balance_data["result"]["list"][0]["totalEquity"])
+        print("💰 Available USDT:", available_usdt)
 
         price_data = client.get_ticker(category="linear", symbol=symbol)
         last_price = float(price_data["result"]["lastPrice"])
+        print("📈 Last price:", last_price)
 
         qty = available_usdt / last_price
         return round(qty, 3)
+
     except Exception as e:
         print("❌ Error calculating max position size:", e)
         return 0
+
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
