@@ -21,7 +21,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "✅ השרת פועל!"
+    return "✅ השרת פועל אתה מקצוען!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
