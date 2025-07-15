@@ -17,66 +17,52 @@ client = HTTP(
 
 app = Flask(__name__)
 
-# פונקציה שמביאה את כל היתרה שלך ומחשבת את הכמות לפי מחיר נוכחי
-def get_max_position_size(symbol):
-    try:
-        balance_data = client.get_wallet_balance(accountType="UNIFIED")
-        print("📦 Raw balance_data:", balance_data)  # הדפסה למעקב
-
-        available_usdt = float(balance_data["result"]["list"][0]["totalEquity"])
-        print("💰 Available USDT:", available_usdt)
-
-        price_data = client.get_ticker(category="linear", symbol=symbol)
-        print("📈 Price data:", price_data)
-
-        last_price = float(price_data["result"]["lastPrice"])
-        print("💵 Last price:", last_price)
-
-        qty = available_usdt / last_price
-        return round(qty, 0.01)
-    except Exception as e:
-        print("❌ Error calculating max position size:", e)
-        return 0
-
-
-
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.get_json(force=True)
-        print("✅ Webhook received:", data)
+        print("\n✅ Payload received:", data)
+    except Exception:
+        print("\n❌ Failed to parse JSON. Raw body:", request.data)
+        return jsonify({'error': 'Invalid or missing JSON'}), 400
 
-        action = data.get("action")
-        symbol = data.get("symbol")
+    if not data or 'action' not in data or 'symbol' not in data:
+        return jsonify({'error': 'Missing required parameters'}), 400
 
-        qty = get_max_position_size(symbol)
-        print(f"🔢 Calculated qty: {qty}")
+    action = data['action'].lower()
+    symbol = data['symbol'].upper()
+    qty = data.get("qty", None)
+    usdt_amount = data.get("usdt_amount", None)
 
-        if qty < 0.01:
-            return jsonify({"error": "Not enough balance to place order"}), 400
+    try:
+        # חישוב כמות לפי USDT אם לא נשלח qty
+        if qty is None and usdt_amount is not None:
+            price_data = client.get_ticker(symbol=symbol)
+            mark_price = float(price_data['result']['list'][0]['lastPrice'])
+            qty = round(usdt_amount / mark_price, 3)  # עיגול לשלוש ספרות אחרי הנקודה
 
-        if action == "buy":
-            side = "Buy"
-        elif action == "sell":
-            side = "Sell"
-        else:
-            return jsonify({"error": "Invalid action"}), 400
+        if qty is None:
+            return jsonify({'error': 'Missing qty or usdt_amount'}), 400
+
+        side = "Buy" if action == "buy" else "Sell"
+
+        print(f"📦 Sending order: {side} {qty} {symbol}")
 
         order = client.place_order(
             category="linear",
             symbol=symbol,
             side=side,
             order_type="Market",
-            qty=qty
+            qty=qty,
+            time_in_force="GoodTillCancel"
         )
-
-        print("✅ Order placed:", order)
         return jsonify(order)
 
     except Exception as e:
-        print("❌ Error in /webhook:", e)
+        print("\n❌ Error placing order:")
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5100)
