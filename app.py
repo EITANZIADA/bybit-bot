@@ -36,31 +36,31 @@ def webhook():
     side = "Buy" if action == "buy" else "Sell"
 
     try:
-        # שלב 1: לבדוק יתרת USDT
+        # שלב 1: בדיקת יתרת USDT
         balance_data = client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
-        print("📦 Raw balance response:", balance_data)
-
         coin_info = balance_data['result']['list'][0]['coin'][0]
+        print("🔍 coin_info:", coin_info)
 
-        # ננסה להשתמש ב־availableToTrade ואם לא קיים - נ fallback ל־availableBalance
-        usdt_balance = float(
-            coin_info.get('availableToTrade') or coin_info.get('availableBalance')
-        )
+        # בדיקה האם יש availableToTrade או availableBalance
+        if coin_info.get("availableToTrade") is not None:
+            usdt_balance = float(coin_info["availableToTrade"])
+        elif coin_info.get("availableBalance") is not None:
+            usdt_balance = float(coin_info["availableBalance"])
+        else:
+            return jsonify({"error": "No usable USDT balance found in account"}), 400
 
         print(f"💰 USDT Available: {usdt_balance}")
 
-        # שלב 2: לבדוק את מחיר השוק של הסימבול
+        # שלב 2: קבלת מחיר שוק
         price_data = client.get_ticker(category="linear", symbol=symbol)
         mark_price = float(price_data['result']['lastPrice'])
-
         print(f"📈 Market price of {symbol}: {mark_price}")
 
-        # שלב 3: לחשב כמות נכס לפי USDT
+        # שלב 3: חישוב כמות רכישה
         qty = round(usdt_balance / mark_price, 4)
-
         print(f"📦 Order Qty: {qty}")
 
-        # שלב 4: שליחת פקודה
+        # שלב 4: ביצוע ההזמנה
         result = client.place_order(
             category="linear",
             symbol=symbol,
