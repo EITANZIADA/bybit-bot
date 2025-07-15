@@ -36,24 +36,27 @@ def webhook():
     side = "Buy" if action == "buy" else "Sell"
 
     try:
-        # שלב 1: לבדוק יתרת USDT
+        # === שלב 1: בדיקת יתרה ===
         balance_data = client.get_wallet_balance(accountType="UNIFIED", coin="USDT")
-        usdt_balance = float(balance_data['result']['list'][0]['coin'][0]['availableToTrade'])
+        print("📦 Full balance data:", balance_data)
 
+        coins = balance_data.get("result", {}).get("list", [])
+        if not coins or not coins[0].get("coin"):
+            return jsonify({'error': "Cannot read USDT balance from Bybit response"}), 500
+
+        usdt_balance = float(coins[0]["coin"][0]["availableToTrade"])
         print(f"💰 USDT Available: {usdt_balance}")
 
-        # שלב 2: לבדוק את מחיר השוק של הסימבול
+        # === שלב 2: בדיקת מחיר שוק ===
         price_data = client.get_ticker(category="linear", symbol=symbol)
         mark_price = float(price_data['result']['lastPrice'])
-
         print(f"📈 Market price of {symbol}: {mark_price}")
 
-        # שלב 3: לחשב כמות נכס לפי USDT
+        # === שלב 3: חישוב כמות לעסקה ===
         qty = round(usdt_balance / mark_price, 4)
+        print(f"🧮 Calculated order qty: {qty}")
 
-        print(f"📦 Order Qty: {qty}")
-
-        # שלב 4: שליחת פקודה
+        # === שלב 4: ביצוע פקודת מרקט ===
         result = client.place_order(
             category="linear",
             symbol=symbol,
