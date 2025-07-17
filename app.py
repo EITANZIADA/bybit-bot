@@ -3,7 +3,7 @@ import traceback
 from flask import Flask, request, jsonify
 from pybit.unified_trading import HTTP
 
-# === חיבור ל־Bybit ===
+# === התחברות ל־Bybit ===
 BYBIT_API_KEY = os.environ.get("BYBIT_API_KEY")
 BYBIT_API_SECRET = os.environ.get("BYBIT_API_SECRET")
 
@@ -14,7 +14,7 @@ client = HTTP(
     recv_window=5000
 )
 
-# === Flask App ===
+# === הגדרת שרת Flask ===
 app = Flask(__name__)
 
 @app.route("/webhook", methods=["POST"])
@@ -31,14 +31,14 @@ def webhook():
 
     action = data["action"]
     symbol = data["symbol"]
-    qty = 0.01  # כמות קבועה של חוזים
+    qty = 0.01  # גודל העסקה
 
-    # הדפסת יתרה לאיתור תקלות
+    # === בדיקת יתרה זמינה ל־Trading ===
     try:
-        balance = client.get_wallet_balance(accountType="UNIFIED")
-        print("💰 Wallet balance:", balance)
+        wallet = client.get_wallet_balance(accountType="UNIFIED")
+        print("🔍 Wallet balance response:", wallet)
     except Exception as e:
-        print("⚠️ Failed to fetch balance:", e)
+        print("⚠️ Failed to fetch wallet balance:", e)
 
     try:
         if action == "buy":
@@ -70,7 +70,7 @@ def webhook():
             return jsonify({"status": "Sell order sent"})
 
         elif action == "close":
-            print("❎ Closing all orders for", symbol)
+            print("❎ Closing all open orders for", symbol)
             client.cancel_all_orders(
                 category="linear",
                 symbol=symbol
@@ -100,6 +100,6 @@ def webhook():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# === Run local server (ignored in production) ===
+# === הרצה מקומית בלבד ===
 if __name__ == "__main__":
     app.run(debug=True, port=10000)
