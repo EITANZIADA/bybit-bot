@@ -33,7 +33,7 @@ def webhook():
     symbol = data["symbol"]
     qty = 0.01  # גודל העסקה
 
-    # === בדיקת יתרה זמינה ל־Trading ===
+    # === הדפסת מצב הארנק
     try:
         wallet = client.get_wallet_balance(accountType="UNIFIED")
         print("🔍 Wallet balance response:", wallet)
@@ -100,6 +100,6 @@ def webhook():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# === הרצה מקומית בלבד ===
+# === שורת ההרצה שתומכת ב־Render ===
 if __name__ == "__main__":
-    app.run(debug=True, port=10000)
+    app.run(host="0.0.0.0", port=10000, debug=True)
