@@ -50,8 +50,7 @@ def webhook():
                 order_type="Market",
                 qty=qty,
                 time_in_force="GoodTillCancel",
-                reduce_only=False,
-                position_idx=1  # לונג
+                reduce_only=False
             )
             return jsonify({"status": "Buy order sent"})
 
@@ -64,8 +63,7 @@ def webhook():
                 order_type="Market",
                 qty=qty,
                 time_in_force="GoodTillCancel",
-                reduce_only=False,
-                position_idx=2  # שורט
+                reduce_only=False
             )
             return jsonify({"status": "Sell order sent"})
 
@@ -83,12 +81,11 @@ def webhook():
             if side not in ["long", "short"]:
                 return jsonify({"error": "Invalid side"}), 400
 
-            is_long = side == "long"
+            # במצב One-Way אי אפשר לשלוט בפוזיציה נפרדת לפי צד
             client.set_trading_stop(
                 category="linear",
                 symbol=symbol,
-                stop_loss=new_stop,
-                position_idx=1 if is_long else 2
+                stop_loss=new_stop
             )
             return jsonify({"status": f"Stop loss updated to {new_stop}"})
 
@@ -100,6 +97,6 @@ def webhook():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# === שורת ההרצה שתומכת ב־Render ===
+# === שורת הרצה שמתאימה ל-Render ===
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000, debug=True)
