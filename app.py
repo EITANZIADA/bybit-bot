@@ -31,7 +31,7 @@ def webhook():
 
     action = data["action"]
     symbol = data["symbol"]
-    qty = 0.01  # גודל העסקה
+    qty = 0.02  # גודל העסקה
 
     # === הדפסת מצב הארנק
     try:
