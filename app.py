@@ -37,8 +37,13 @@ def webhook():
     try:
         wallet = client.get_wallet_balance(accountType="UNIFIED")
         print("🔍 Wallet balance response:", wallet)
+
+        # ✅ שימוש ב-get_tickers במקום get_ticker
+        price_data = client.get_tickers(category="linear", symbol=symbol)
+        print("📈 Price data:", price_data)
+
     except Exception as e:
-        print("⚠️ Failed to fetch wallet balance:", e)
+        print("⚠️ Failed to fetch wallet balance or price:", e)
 
     try:
         if action == "buy":
