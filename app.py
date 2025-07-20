@@ -3,10 +3,9 @@ import traceback
 from flask import Flask, request, jsonify
 from pybit.unified_trading import HTTP
 
-# === הגדרות קבועות ===
-BYBIT_API_KEY = os.getenv("BYBIT_API_KEY")
-BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
-LEVERAGE = 10  # תוכל לשנות לפי הצורך
+# === התחברות ל־Bybit ===
+BYBIT_API_KEY = os.environ.get("BYBIT_API_KEY")
+BYBIT_API_SECRET = os.environ.get("BYBIT_API_SECRET")
 
 client = HTTP(
     testnet=False,
@@ -15,90 +14,89 @@ client = HTTP(
     recv_window=5000
 )
 
+# === הגדרת שרת Flask ===
 app = Flask(__name__)
 
-@app.route('/webhook', methods=['POST'])
+@app.route("/webhook", methods=["POST"])
 def webhook():
     try:
-        data = request.get_json(force=True)
+        data = request.get_json()
         print("📩 Payload received:", data)
+    except Exception as e:
+        print("❌ Failed to parse JSON:", e)
+        return jsonify({"error": "Invalid JSON"}), 400
 
-        action = data.get("action")
-        symbol = data.get("symbol")
+    if not data or "action" not in data or "symbol" not in data:
+        return jsonify({"error": "Missing 'action' or 'symbol'"}), 400
 
-        if action == "test":
-            print("✅ Test webhook received.")
-            return jsonify({"status": "Test OK"})
+    action = data["action"]
+    symbol = data["symbol"]
+    qty = 0.01  # גודל העסקה
 
-        if not action or not symbol:
-            raise ValueError("Missing required field: 'action' or 'symbol'")
+    # === הדפסת מצב הארנק
+    try:
+        wallet = client.get_wallet_balance(accountType="UNIFIED")
+        print("🔍 Wallet balance response:", wallet)
+    except Exception as e:
+        print("⚠️ Failed to fetch wallet balance:", e)
 
-        # מביא מידע על הנכס כדי לחשב את ה־quantity לפי כל ההון
-        balance = client.get_wallet_balance(accountType="UNIFIED")["result"]["list"][0]["totalEquity"]
-        price_data = client.get_ticker(category="linear", symbol=symbol)
-        mark_price = float(price_data["result"]["list"][0]["markPrice"])
-        quantity = round((float(balance) * LEVERAGE) / mark_price, 3)
-
-        print(f"🔢 Calculated quantity: {quantity} (Balance: {balance}, Price: {mark_price})")
-
+    try:
         if action == "buy":
+            print("🟢 Executing BUY order")
             client.place_order(
                 category="linear",
                 symbol=symbol,
                 side="Buy",
                 order_type="Market",
-                qty=quantity,
-                time_in_force="GoodTillCancel"
+                qty=qty,
+                time_in_force="GoodTillCancel",
+                reduce_only=False
             )
-            print("✅ BUY order sent.")
+            return jsonify({"status": "Buy order sent"})
 
         elif action == "sell":
+            print("🔴 Executing SELL order")
             client.place_order(
                 category="linear",
                 symbol=symbol,
                 side="Sell",
                 order_type="Market",
-                qty=quantity,
-                time_in_force="GoodTillCancel"
+                qty=qty,
+                time_in_force="GoodTillCancel",
+                reduce_only=False
             )
-            print("✅ SELL order sent.")
+            return jsonify({"status": "Sell order sent"})
 
         elif action == "close":
-            client.place_order(
+            print("❎ Closing all open orders for", symbol)
+            client.cancel_all_orders(
                 category="linear",
-                symbol=symbol,
-                side="Sell",  # סוגר פוזיציה לונג
-                order_type="Market",
-                qty=quantity,
-                reduce_only=True,
-                time_in_force="GoodTillCancel"
+                symbol=symbol
             )
-            print("✅ CLOSE position (Reduce Only).")
+            return jsonify({"status": "All positions closed"})
 
         elif action == "update_stop":
-            position_side = data.get("side")
-            new_stop = data.get("new_stop")
-            if not position_side or not new_stop:
-                raise ValueError("Missing 'side' or 'new_stop' for update_stop")
+            side = data.get("side", "")
+            new_stop = float(data.get("new_stop", 0))
+            if side not in ["long", "short"]:
+                return jsonify({"error": "Invalid side"}), 400
 
+            # במצב One-Way אי אפשר לשלוט בפוזיציה נפרדת לפי צד
             client.set_trading_stop(
                 category="linear",
                 symbol=symbol,
-                side=position_side.capitalize(),
-                stop_loss=round(float(new_stop), 2)
+                stop_loss=new_stop
             )
-            print("✅ Stop-loss updated.")
+            return jsonify({"status": f"Stop loss updated to {new_stop}"})
 
         else:
-            raise ValueError("Invalid action received.")
-
-        return jsonify({"status": "ok"})
+            return jsonify({"error": "Unknown action"}), 400
 
     except Exception as e:
-        print("❌ ERROR:", str(e))
+        print("❌ Execution error:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-
-if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=10000)
+# === שורת הרצה שמתאימה ל-Render ===
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000, debug=True)
