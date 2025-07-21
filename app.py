@@ -31,19 +31,7 @@ def webhook():
 
     action = data["action"]
     symbol = data["symbol"]
-    qty = 0.02  # גודל העסקה
-
-    # === הדפסת מצב הארנק
-    try:
-        wallet = client.get_wallet_balance(accountType="UNIFIED")
-        print("🔍 Wallet balance response:", wallet)
-
-        # ✅ שימוש ב-get_tickers במקום get_ticker
-        price_data = client.get_tickers(category="linear", symbol=symbol)
-        print("📈 Price data:", price_data)
-
-    except Exception as e:
-        print("⚠️ Failed to fetch wallet balance or price:", e)
+    qty = 0.02  # גודל העסקה (אפשר לשנות לפי הצורך)
 
     try:
         if action == "buy":
@@ -73,20 +61,34 @@ def webhook():
             return jsonify({"status": "Sell order sent"})
 
         elif action == "close":
-            print("❎ Closing all open orders for", symbol)
-            client.cancel_all_orders(
-                category="linear",
-                symbol=symbol
-            )
-            return jsonify({"status": "All positions closed"})
+            print("❎ Closing open position for", symbol)
+
+            # שליפת מידע על הפוזיציה
+            positions = client.get_positions(category="linear", symbol=symbol)
+            size = float(positions['result']['list'][0]['size'])
+            side = positions['result']['list'][0]['side']  # "Buy" או "Sell"
+
+            if size > 0:
+                closing_side = "Sell" if side == "Buy" else "Buy"
+
+                client.place_order(
+                    category="linear",
+                    symbol=symbol,
+                    side=closing_side,
+                    order_type="Market",
+                    qty=size,
+                    time_in_force="GoodTillCancel",
+                    reduce_only=True
+                )
+                return jsonify({"status": f"Position closed with market {closing_side}"})
+            else:
+                return jsonify({"status": "No open position to close"})
 
         elif action == "update_stop":
-            side = data.get("side", "")
             new_stop = float(data.get("new_stop", 0))
-            if side not in ["long", "short"]:
-                return jsonify({"error": "Invalid side"}), 400
+            if new_stop <= 0:
+                return jsonify({"error": "Invalid stop loss price"}), 400
 
-            # במצב One-Way אי אפשר לשלוט בפוזיציה נפרדת לפי צד
             client.set_trading_stop(
                 category="linear",
                 symbol=symbol,
@@ -102,6 +104,6 @@ def webhook():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# === שורת הרצה שמתאימה ל-Render ===
+# === מתאים להרצה ב־Render ===
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000, debug=True)
