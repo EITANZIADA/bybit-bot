@@ -47,6 +47,13 @@ def webhook():
         # חישוב כמות
         qty = round(available_balance / last_price, 4) if last_price > 0 else 0
 
+        print("🧪 usdt_balance raw:", usdt_balance)
+        print("🧪 available_balance:", available_balance)
+        print("🧪 price_data:", price_data)
+        print("🧪 last_price:", last_price)
+        print("🧪 qty:", qty)
+
+
         if qty <= 0:
             return jsonify({"error": "Insufficient balance or invalid price"}), 400
 
