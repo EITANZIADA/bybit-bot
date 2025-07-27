@@ -38,7 +38,7 @@ def webhook():
         balance_data = client.get_wallet_balance(accountType="UNIFIED")
         wallets = balance_data["result"]["list"][0]["coin"]
         usdt_balance = next((item for item in wallets if item["coin"] == "USDT"), None)
-        available_balance = float(usdt_balance["availableToTrade"]) if usdt_balance else 0
+        available_balance = float(usdt_balance.get("availableBalance", 0)) if usdt_balance else 0
 
         # שליפת מחיר נוכחי
         price_data = client.get_ticker(category="linear", symbol=symbol)
