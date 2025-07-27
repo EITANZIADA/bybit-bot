@@ -31,11 +31,35 @@ def webhook():
 
     action = data["action"]
     symbol = data["symbol"]
-    qty = 0.02  # גודל העסקה (אפשר לשנות לפי הצורך)
+
+    # === חישוב כמות לפי 100% מההון ===
+    try:
+        # שליפת יתרה
+        balance_data = client.get_wallet_balance(accountType="UNIFIED")
+        wallets = balance_data["result"]["list"][0]["coin"]
+        usdt_balance = next((item for item in wallets if item["coin"] == "USDT"), None)
+        available_balance = float(usdt_balance["availableToTrade"]) if usdt_balance else 0
+
+        # שליפת מחיר נוכחי
+        price_data = client.get_ticker(category="linear", symbol=symbol)
+        last_price = float(price_data["result"]["list"][0]["lastPrice"]) if price_data else 0
+
+        # חישוב כמות
+        qty = round(available_balance / last_price, 4) if last_price > 0 else 0
+
+        if qty <= 0:
+            return jsonify({"error": "Insufficient balance or invalid price"}), 400
+
+        print(f"🧮 Available balance: {available_balance} USDT, Price: {last_price}, Qty: {qty}")
+
+    except Exception as e:
+        print("❌ Error calculating qty:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Failed to calculate position size"}), 500
 
     try:
         if action == "buy":
-            print("🟢 Executing BUY order")
+            print(f"🟢 BUY {symbol} x {qty}")
             client.place_order(
                 category="linear",
                 symbol=symbol,
@@ -48,7 +72,7 @@ def webhook():
             return jsonify({"status": "Buy order sent"})
 
         elif action == "sell":
-            print("🔴 Executing SELL order")
+            print(f"🔴 SELL {symbol} x {qty}")
             client.place_order(
                 category="linear",
                 symbol=symbol,
@@ -61,16 +85,14 @@ def webhook():
             return jsonify({"status": "Sell order sent"})
 
         elif action == "close":
-            print("❎ Closing open position for", symbol)
-
-            # שליפת מידע על הפוזיציה
+            print(f"❎ Closing position for {symbol}")
             positions = client.get_positions(category="linear", symbol=symbol)
-            size = float(positions['result']['list'][0]['size'])
-            side = positions['result']['list'][0]['side']  # "Buy" או "Sell"
+            pos = positions['result']['list'][0]
+            size = float(pos['size'])
+            side = pos['side']
 
             if size > 0:
                 closing_side = "Sell" if side == "Buy" else "Buy"
-
                 client.place_order(
                     category="linear",
                     symbol=symbol,
@@ -80,7 +102,7 @@ def webhook():
                     time_in_force="GoodTillCancel",
                     reduce_only=True
                 )
-                return jsonify({"status": f"Position closed with market {closing_side}"})
+                return jsonify({"status": f"Position closed with {closing_side}"})
             else:
                 return jsonify({"status": "No open position to close"})
 
@@ -89,6 +111,7 @@ def webhook():
             if new_stop <= 0:
                 return jsonify({"error": "Invalid stop loss price"}), 400
 
+            print(f"🛑 Updating stop for {symbol} to {new_stop}")
             client.set_trading_stop(
                 category="linear",
                 symbol=symbol,
@@ -97,7 +120,7 @@ def webhook():
             return jsonify({"status": f"Stop loss updated to {new_stop}"})
 
         else:
-            return jsonify({"error": "Unknown action"}), 400
+            return jsonify({"error": f"Unknown action '{action}'"}), 400
 
     except Exception as e:
         print("❌ Execution error:", e)
