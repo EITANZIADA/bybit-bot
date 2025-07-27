@@ -35,10 +35,10 @@ def webhook():
     # === חישוב כמות לפי 100% מההון ===
     try:
         # שליפת יתרה
-        balance_data = client.get_wallet_balance(accountType="UNIFIED")
-        wallets = balance_data["result"]["list"][0]["coin"]
-        usdt_balance = next((item for item in wallets if item["coin"] == "USDT"), None)
-        available_balance = float(usdt_balance.get("availableBalance", 0)) if usdt_balance else 0
+       # שליפת יתרה לפי המטבע שאתה סוחר בו
+        base_coin = symbol[:-4] if symbol.endswith("USDT") else symbol
+        coin_balance = next((item for item in wallets if item["coin"] == base_coin), None)
+        available_balance = float(coin_balance.get("availableBalance", 0)) if coin_balance else 0
 
         # שליפת מחיר נוכחי
         price_data = client.get_tickers(category="linear", symbol=symbol)
