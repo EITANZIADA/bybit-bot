@@ -41,9 +41,8 @@ def webhook():
         available_balance = float(usdt_balance.get("availableBalance", 0)) if usdt_balance else 0
 
         # שליפת מחיר נוכחי
-       price_data = client.get_tickers(category="linear", symbol=symbol)
-       last_price = float(price_data["result"]["list"][0]["lastPrice"]) if price_data else 0
-
+        price_data = client.get_tickers(category="linear", symbol=symbol)
+        last_price = float(price_data["result"]["list"][0]["lastPrice"]) if price_data else 0
 
         # חישוב כמות
         qty = round(available_balance / last_price, 4) if last_price > 0 else 0
