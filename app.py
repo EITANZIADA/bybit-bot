@@ -32,11 +32,14 @@ def webhook():
     action = data["action"]
     symbol = data["symbol"]
 
-    # === חישוב כמות לפי 100% מההון ===
+    # === חישוב כמות לפי המטבע הרלוונטי מתוך היתרה ===
     try:
-        # שליפת יתרה
-       # שליפת יתרה לפי המטבע שאתה סוחר בו
+        balance_data = client.get_wallet_balance(accountType="UNIFIED")
+        wallets = balance_data["result"]["list"][0]["coin"]
+
+        # חילוץ שם המטבע (למשל ETH מתוך ETHUSDT)
         base_coin = symbol[:-4] if symbol.endswith("USDT") else symbol
+
         coin_balance = next((item for item in wallets if item["coin"] == base_coin), None)
         available_balance = float(coin_balance.get("availableBalance", 0)) if coin_balance else 0
 
@@ -49,7 +52,8 @@ def webhook():
 
         # === הדפסת DEBUG ללוגים ===
         print("🧪 DEBUGGING VALUES:")
-        print("🧪 usdt_balance raw:", usdt_balance)
+        print("🧪 base_coin:", base_coin)
+        print("🧪 coin_balance raw:", coin_balance)
         print("🧪 available_balance:", available_balance)
         print("🧪 price_data:", price_data)
         print("🧪 last_price:", last_price)
