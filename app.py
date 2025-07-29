@@ -32,41 +32,30 @@ def webhook():
     action = data["action"]
     symbol = data["symbol"]
 
-    # === חישוב כמות לפי המטבע הרלוונטי מתוך היתרה ===
+    # === חישוב כמות לפי 100% מההון בדולרים ===
     try:
         balance_data = client.get_wallet_balance(accountType="UNIFIED")
-        wallets = balance_data["result"]["list"][0]["coin"]
+        total_equity = float(balance_data["result"]["list"][0]["totalEquity"])
 
-        # חילוץ שם המטבע (למשל ETH מתוך ETHUSDT)
-        base_coin = symbol[:-4] if symbol.endswith("USDT") else symbol
-
-        coin_balance = next((item for item in wallets if item["coin"] == base_coin), None)
-        available_balance = float(coin_balance.get("availableBalance", 0)) if coin_balance else 0
-
-        # שליפת מחיר נוכחי
         price_data = client.get_tickers(category="linear", symbol=symbol)
         last_price = float(price_data["result"]["list"][0]["lastPrice"]) if price_data else 0
 
-        # חישוב כמות
-        qty = round(available_balance / last_price, 4) if last_price > 0 else 0
+        qty = round(total_equity / last_price, 4) if last_price > 0 else 0
 
-        # === הדפסת DEBUG ללוגים ===
-        print("🧪 DEBUGGING VALUES:")
-        print("🧪 base_coin:", base_coin)
-        print("🧪 coin_balance raw:", coin_balance)
-        print("🧪 available_balance:", available_balance)
-        print("🧪 price_data:", price_data)
+        # DEBUG
+        print("🧪 total_equity:", total_equity)
         print("🧪 last_price:", last_price)
         print("🧪 qty:", qty)
 
         if qty <= 0:
-            return jsonify({"error": "Insufficient balance or invalid price"}), 400
+            return jsonify({"error": "Insufficient equity or invalid price"}), 400
 
     except Exception as e:
         print("❌ Error calculating qty:", e)
         traceback.print_exc()
         return jsonify({"error": "Failed to calculate position size"}), 500
 
+    # === ביצוע פקודות ===
     try:
         if action == "buy":
             print(f"🟢 BUY {symbol} x {qty}")
