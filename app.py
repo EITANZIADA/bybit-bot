@@ -32,7 +32,7 @@ def webhook():
     action = data["action"]
     symbol = data["symbol"]
 
-    # === חישוב כמות לפי 100% מההון בדולרים ===
+    # === חישוב כמות לפי 90% מההון ===
     try:
         balance_data = client.get_wallet_balance(accountType="UNIFIED")
         total_equity = float(balance_data["result"]["list"][0]["totalEquity"])
@@ -40,9 +40,10 @@ def webhook():
         price_data = client.get_tickers(category="linear", symbol=symbol)
         last_price = float(price_data["result"]["list"][0]["lastPrice"]) if price_data else 0
 
-        qty = round(total_equity / last_price, 4) if last_price > 0 else 0
+        investment_pct = 0.90
+        amount_to_use = total_equity * investment_pct
+        qty = round(amount_to_use / last_price, 4) if last_price > 0 else 0
 
-        # DEBUG
         print("🧪 total_equity:", total_equity)
         print("🧪 last_price:", last_price)
         print("🧪 qty:", qty)
@@ -126,6 +127,6 @@ def webhook():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-# === מתאים להרצה ב־Render ===
+# === מתאים להרצה ב־Render או לוקאלית ===
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000, debug=True)
