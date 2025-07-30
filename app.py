@@ -1,4 +1,5 @@
 import os
+import math
 import traceback
 from flask import Flask, request, jsonify
 from pybit.unified_trading import HTTP
@@ -32,7 +33,7 @@ def webhook():
     action = data["action"]
     symbol = data["symbol"]
 
-    # === חישוב כמות לפי 90% מההון ===
+    # === חישוב כמות לפי 90% מההון ועיגול לפי step size ===
     try:
         balance_data = client.get_wallet_balance(accountType="UNIFIED")
         total_equity = float(balance_data["result"]["list"][0]["totalEquity"])
@@ -42,14 +43,22 @@ def webhook():
 
         investment_pct = 0.90
         amount_to_use = total_equity * investment_pct
-        qty = round(amount_to_use / last_price, 4) if last_price > 0 else 0
+
+        # שליפת step size אוטומטית מה-API
+        instrument_info = client.get_instruments_info(category="linear", symbol=symbol)
+        step_size = float(instrument_info["result"]["list"][0]["lotSizeFilter"]["qtyStep"])
+
+        raw_qty = amount_to_use / last_price
+        qty = math.floor(raw_qty / step_size) * step_size
+        qty = round(qty, 8)  # שומר על דיוק לפי Bybit
 
         print("🧪 total_equity:", total_equity)
         print("🧪 last_price:", last_price)
+        print("🧪 step_size:", step_size)
         print("🧪 qty:", qty)
 
         if qty <= 0:
-            return jsonify({"error": "Insufficient equity or invalid price"}), 400
+            return jsonify({"error": "Insufficient equity or invalid qty"}), 400
 
     except Exception as e:
         print("❌ Error calculating qty:", e)
