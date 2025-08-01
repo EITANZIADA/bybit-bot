@@ -18,6 +18,11 @@ client = HTTP(
 # === הגדרת שרת Flask ===
 app = Flask(__name__)
 
+# ✅ מסלול פינג שישאיר את השרת שלך ער
+@app.route("/ping", methods=["GET"])
+def ping():
+    return "pong", 200
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
